@@ -1,0 +1,443 @@
+let apiRoot = 'https://kz-sport.com/matchvnew/assets/api/'
+const containerElement = document.querySelector('.inner-container')
+const selection = document.querySelector('.selection')
+const loader = document.querySelector('.loader')
+const loaderInner = document.querySelector('.lds-default')
+let currentOutput = 'review'
+let isLoaded = false
+let renderedIds = []
+
+const lang = language()
+
+const queryString = new URLSearchParams(location.search)
+const match_id = queryString.get('match_id')
+let site = queryString.get('company')
+if (!site) {
+    site = 'b'
+}
+let genData = null
+let sportType = ""
+let iFrameLink = ""
+
+function language() {
+    switch (THEME) {
+        case 'kz-sport':
+            return 'ru'
+        case 'max-sports':
+            return 'en'
+        default:
+            return 'en'
+    }
+}
+
+function renderIntoEnglish(text) {
+    switch(text) {
+        case 'Ассисты': return 'Assists'
+        case 'Буллит классический': return 'Penalty shot'
+        case 'Буллит реализован': return 'Penalty shot scored'
+        case 'Буллит с преследованием': return 'Penalty shot with pursuit'
+        case 'Видеопросмотр': return 'Video Replay'
+        case 'Время': return 'Time'
+        case 'Гол': return 'Goal'
+        case 'Действие': return 'Action'
+        case 'Желтая карточка': return 'Yellow card'
+        case 'Задержка': return 'Delay'
+        case 'Завершён': return 'Finished'
+        case 'Игрок': return 'Player'
+        case 'Команда': return 'Team'
+        case 'Конец матча': return 'End of match'
+        case 'Конец периода / тайма': return 'End of period / half'
+        case 'Красная карточка': return 'Red card'
+        case 'Начало матча': return 'Start of the match'
+        case 'Начало периода / тайма': return 'Start of period / half'
+        case 'Не начат': return 'Not Started'
+        case 'Обзор матча': return 'Game Events'
+        case 'Отложен штраф': return 'Delayed Penalty'
+        case 'Отмена матча': return 'Match Canceled'
+        case 'Пауза в игре': return 'Match Paused'
+        case 'Победа по буллитам': return 'Win in shootout'
+        case 'Подача': return 'Ball'
+        case 'Послематчевые буллиты': return 'Shootout'
+        case 'Промах': return 'Miss'
+        case 'Разминка': return 'Warm up'
+        case 'Смена вратаря': return 'Empty Net'
+        case 'Событие': return 'Event'
+        case 'Счет': return 'Score'
+        case 'Таймаут': return 'Timeout'
+        case 'Таймер': return 'Timer'
+        case 'Таймер запущен': return 'Start Timer'
+        case 'Таймер остановлен': return 'Stop Timer'
+        case 'Штраф': return 'Penalty'
+        case 'Штрафной удар': return 'Penalty kick'
+        case 'Live-трансляция': return 'Watch Live'
+        case 'Техническое поражение': return 'Technical defeat'
+        default: return text
+    }
+}
+
+function translate(input) {
+    return lang === 'ru' ? input : renderIntoEnglish(input)
+}
+
+async function makeApiRequest({...args}) {
+  try {
+        const fetchedData = await fetch(getQueryURL(args), {
+            // headers: {
+            //     'X-Api-Key': '-3Ufzr\\27Fu*[Vg-'
+            // }
+        })
+        const parsedData = await fetchedData.json()
+        if (parsedData.is_success) {
+            returnData = parsedData.data
+        } else {
+            throw new Error(parsedData.message)
+        }
+    } catch (message) {
+        console.error(message)
+        returnData = null
+    } finally {
+        return returnData
+    }
+}
+
+function getQueryURL(args) {
+    return `${apiRoot}?${Object.keys(args).map(key => `${key}=${args[key]}`).join('&')}`
+}
+
+function updateTemplate(data) {
+    const mainstats = document.querySelector('.info__mainstats')
+    const cricketStats = document.querySelector('.info__cricket-stats')
+    const buttons = document.querySelectorAll('.buttons__button')
+    mainstats.innerHTML = `
+                            <p class="info__time">${data.gameInfo.date}</p>
+                            <p class="info__result">${(data.gameInfo.score.home === null ? '0' : data.gameInfo.score.home) + (data.gameInfo.ball ? `/${data.gameInfo.teams.home.outs}` : '')}-${(data.gameInfo.score.away === null ? '0' : data.gameInfo.score.away) + (data.gameInfo.ball ? `/${data.gameInfo.teams.away.outs}` : '')}</p>
+                            <p class="info__stage-results">${data.gameInfo.score.score_period === null ? '' : data.gameInfo.score.score_period}</p>
+                            <p class="info__status">${data.gameInfo.livematch === null ? translate('Не начат') : translate(data.gameInfo.livematch)}</p>
+                        `
+    
+    if (site !== 'v') {
+        if (cricketStats) {
+            cricketStats.innerHTML = `
+            <div class="info__cricket-center-container">
+                <div class="info__cricket-center">Подача: ${data.gameInfo.ball}</div>
+            </div>
+            `
+        }
+        const newNumberOfEvents = data.events.length
+        console.log({events: data.events})
+        let firstElementToRender = selection.querySelectorAll('.selection__event').length
+        try {
+            renderedIds.forEach((id, i) => {
+                console.log({id, dataId: data.events[i].id})
+                if (id !== data.events[i].id) {
+                    console.log('found', i, selection.children[0].lastChild, selection.children[0].lastChild.id)
+                    firstElementToRender = i
+                    do {
+                        selection.children[0].removeChild(selection.children[0].lastChild)
+                        console.log('lastChildId', selection.children[0].lastChild.id, selection.children[0].children.length)
+                    } while (selection.children[0].children.length !== firstElementToRender)
+                    throw new Error
+                }
+        })} catch {} finally {
+                try {
+                    // const el = document.getElementById(data.events[firstElementToRender].id)
+                    // const firstIndexToDelete = [...el.parentElement.parentElement[0].children].indexOf(el)
+                    // for (let selectionLength = selection.children[0].children.length; selectionLength > firstIndexToDelete; selectionLength--) {
+                    //     selection.children[0].removeChild(selection.children[0].lastChild)
+                    // }
+
+                } catch {} finally {
+                    selection.children[0].insertAdjacentHTML('beforeend', buildReview([...data.events.splice(firstElementToRender, newNumberOfEvents - firstElementToRender)]))
+                    renderedIds = data.events.map(event => event.id)
+    
+                    let stages = document.querySelectorAll('.stage')
+                    
+                    stages = [...stages].filter(stage => stage.children.length === 2)
+                    stages.forEach(stage => {
+                        const myEvent = Object.entries(data.events).filter(ev => ev[1].id == stage.id)
+                        if(myEvent[0]) {
+                            stage.lastChild.innerHTML = myEvent[0][1].params.score
+                        }
+    
+                    })
+                }
+            }
+    }
+
+}
+
+function buildTemplate(data, allowTrans) {
+    let output = `
+        <div class="info">
+            <h1 class="info__division">${data.gameInfo.division_name}</h1>
+            <div class="info__stats">
+                <div class="info__team">
+                    <div class="info__teampic-container">
+                        <img class="info__teampic" src="${data.gameInfo.teams.home.logo.replace('scout.','sc.')}" alt="${data.gameInfo.teams.home.name}">
+                    </div>
+                    <p class="info__teamname">${data.gameInfo.teams.home.name}</p>
+                </div>
+                <div class="info__mainstats">
+                    <p class="info__time">${data.gameInfo.date}</p>
+                    <p class="info__result">${(data.gameInfo.score.home === null ? '0' : data.gameInfo.score.home) + (data.gameInfo.ball ? `/${data.gameInfo.teams.home.outs}` : '')}-${(data.gameInfo.score.away === null ? '0' : data.gameInfo.score.away) + (data.gameInfo.ball ? `/${data.gameInfo.teams.away.outs}` : '')}</p>
+                    <p class="info__stage-results">${data.gameInfo.score.score_period === null || data.gameInfo.ball ? '' : data.gameInfo.score.score_period}</p>
+                    <p class="info__status">${data.gameInfo.livematch === null ? translate('Не начат') : translate(data.gameInfo.livematch)}</p>
+                </div>
+                <div class="info__team">
+                    <div class="info__teampic-container">
+                        <img class="info__teampic" src="${data.gameInfo.teams.away.logo.replace('scout.','sc.')}" alt="${data.gameInfo.teams.away.name}">
+                    </div>
+                    <p class="info__teamname">${data.gameInfo.teams.away.name}</p>
+                </div>
+            </div>
+            ${
+                data.gameInfo.ball ?
+                `<div class="info__cricket-stats">
+                    <div class="info__cricket-center-container">
+                        <div class="info__cricket-center">${translate('Подача')}: ${data.gameInfo.ball}</div>
+                    </div>
+                </div>` : ''
+            }
+        </div>
+        <div class="buttons" ${site === "v" ? "style='display:none;'" : ""}>
+            <button class="buttons__button ${currentOutput !== 'live' ? 'buttons__button_active' : ''}" type="button">${translate('Обзор матча')}</button>
+            <button class="buttons__button ${currentOutput === 'live' ? 'buttons__button_active' : ''}" type="button" ${iFrameLink === "" || !allowTrans ? "style='display:none;'" : ""}>${translate('Live-трансляция')}</button>
+        </div>
+        `
+
+    containerElement.innerHTML = output
+
+    if (site !== 'v') {
+        const buttons = document.querySelectorAll('.buttons__button')
+        selection.innerHTML = '<div>' + buildReview(data.events) + '</div>' + `<div class="iframe__container iframe__container_hidden">${iFrameLink}</div>`
+        
+        buttons.forEach(btn => {
+            btn.addEventListener('click', e => {
+                buttons.forEach(button => {
+                    button.classList.remove('buttons__button_active')
+                    e.target.classList.add('buttons__button_active')
+                })
+    
+                if (buttons[0].classList.contains('buttons__button_active')) {
+                    selection.children[0].style.display = 'unset'
+                    selection.children[1].classList.add('iframe__container_hidden')
+                    currentOutput = 'review'
+                } else {
+                    selection.children[0].style.display = 'none'
+                    selection.children[1].classList.remove('iframe__container_hidden')
+                    currentOutput = 'live'
+                }
+            })
+        })
+    }
+}
+
+function iframeElement(timestart, timesh, video) {
+
+    let videoLink = video
+
+    if (timestart === -1) {
+        if (video && video !== '') {
+            let autoplay = "&autoplay=1"
+            if (!videoLink.includes("vk.com")) {
+                videoLink.replace("watch?v=", "embed/")
+                videoLink.replace("https://youtu.be/", "https://www.youtube.com/embed/")
+                autoplay = " "
+            }
+            return `<iframe class='iframecss iframe__content' style='display: block; margin: auto;' src='${videoLink}${autoplay}' frameborder='0' allowfullscreen></iframe>`
+        } else {
+            return ""
+        }
+    } else if (timesh && timesh !== '') {
+            return `<iframe class='iframe__content' style='display: block; margin: auto;' src='${videoLink}&autoplay=1&t=${timesh}' width='640' height='360' frameborder='0' allowfullscreen></iframe>`
+    } else if (timestart === 1 && timesh === null && video && video !== '') {
+        let autoplay = "&autoplay=1"
+            if (!videoLink.includes("vk.com")) {
+                videoLink.replace("watch?v=", "embed/")
+                videoLink.replace("https://youtu.be/", "https://www.youtube.com/embed/")
+                autoplay = " "
+            }
+        return `<iframe class='iframecss iframe__content' style='display: block; margin: auto;' src='${videoLink}${autoplay}' frameborder='0' allowfullscreen></iframe>`
+    } else {
+        return ""
+    }
+}
+
+function getBEMClassByEventName(name) {
+    switch(name) {
+        case 'Начало матча':
+        case 'Конец матча':
+            return 'match'
+        case 'Деление на таймы':
+        case 'Деление на периоды':
+        case 'Послематчевые буллиты':
+        case 'Серия пенальти':
+            return 'stage'
+        case 'Начало тайма 1':
+        case 'Начало тайма 2':
+        case 'Конец тайма 1':
+        case 'Конец тайма 2':
+        case 'Начало периода 1':
+        case 'Начало периода 2':
+        case 'Начало периода 3':
+        case 'Конец периода 1':
+        case 'Конец периода 2':
+        case 'Конец периода 3':
+        case 'Начало сета 1':
+        case 'Начало сета 2':
+        case 'Начало сета 3':
+        case 'Конец сета 1':
+        case 'Конец сета 2':
+        case 'Конец сета 3':
+        case 'Победа по пенальти':
+        case 'Победа по буллитам':
+        case 'Начало иннинга 1':
+        case 'Начало иннинга 2':
+        case 'Начало иннинга 3':
+        case 'Конец иннинга 1':
+        case 'Конец иннинга 2':
+        case 'Конец иннинга 3':
+        case 'Конец подач':
+        case 'Техническое поражение':
+            return 'stageend'
+        case 'Гол': 
+        case 'Очко':
+            return 'goal'
+        case '0 очков':
+        case '1 очко':
+        case '2 очка':
+        case '3 очка':
+        case '4 очка':
+        case '5 очков':
+        case '10 очков':
+        case 'Out':
+        case 'Wicket':
+        case 'Wide':
+        case 'Wide + Run':
+        case 'No ball':
+            return 'cricket_event'
+        case 'Фол':
+            if (sportType === 'pb') {
+                return 'goal'
+            }
+            return 'ingame'
+        default: 
+            return 'ingame'
+
+    }
+}
+
+function buildReview(events) {
+    if (site === 'v') {
+        return ""
+    }
+    renderedIds = events.map(event => event.id)
+    let template = events.map(event => `<div id="${event.id}" class="${getBEMClassByEventName(event.e_name)} selection__event ${event.is_home === false ? 'selection__event_away' : ''}">${Object.keys(event.params)
+        .map((el, i) => {
+            let stuffToRender
+            const currentValue = Object.values(event.params)[i]
+            if (el === "outlined") {
+                stuffToRender = `<img
+                
+                    class="${getBEMClassByEventName(event.e_name)}__${Object.keys(currentValue)[0]}"
+                    src="https://kz-sport.com/matchvnew/assets/img/${Object.values(currentValue)[0]}.svg"
+                    alt="${Object.values(currentValue)[0]}">`
+                if (Object.keys(currentValue).length !== 1) {
+                    // описан случай только для двух
+                    stuffToRender += `<div class="${getBEMClassByEventName(event.e_name)}__${Object.keys(currentValue)[1]}">${Object.values(currentValue)[1]}</div>`
+                }
+            } else {
+                stuffToRender = currentValue instanceof Array ?
+                    currentValue.join() :
+                    currentValue
+
+            }
+            return `<div class="${getBEMClassByEventName(event.e_name)}__${el}">${stuffToRender}</div>`})
+        .join('')}</div>`)
+    return template.join('')
+}
+
+function fadeOut(el) {
+    el.style.opacity = 1
+    ;(function fade() {
+        if ((el.style.opacity -= .1) < 0) {
+            el.style.display = 'none'
+        } else {
+            requestAnimationFrame(fade)
+        }
+    })();
+};
+
+function load() {
+    fadeOut(loaderInner)
+}
+
+if (THEME === 'kz-sport') {
+    window.onload = () => {
+        load()
+    } 
+}
+
+;(async function start() {
+    const data = await makeApiRequest({endpoint: 'match/info', match_id, site, lang})
+    if (data?.gameInfo?.iframe) {
+        iFrameLink = iframeElement(data.gameInfo.iframe.timeStart, data.gameInfo.iframe.timesh, data.gameInfo.iframe.video)
+    }
+    if (data?.gameInfo?.sport && sportType === '') {
+        sportType = data.gameInfo.sport
+    }
+
+    let allowTrans = true
+    if ([1550, 1551, 1791, 5048, 5049, 5050].includes(data?.gameInfo?.division_id)) {
+        iFrameLink = `<iframe class='iframe__content' style='display: block; margin: auto;' src='https://rtmp2.srchat.ru/3HL-NORTHBS/embed.html' width='640' height='360' frameborder='0' allowfullscreen></iframe>`
+        if (data.events.find(event => event.event_id == 23) && !data.events.find(event => event.event_id == 25)) {
+            allowTrans = true
+        } else {
+            allowTrans = false
+        }
+    } 
+    if ([36167, 36168, 36169, 36170, 36171, 36172].includes(data?.gameInfo?.division_id)) {
+        iFrameLink = `<iframe class='iframe__content' style='display: block; margin: auto;' src='https://rtmp2.srchat.ru/3HL-SOUTHBS/embed.html' width='640' height='360' frameborder='0' allowfullscreen></iframe>`
+        if (data.events.find(event => event.event_id == 23) && !data.events.find(event => event.event_id == 25)) {
+            allowTrans = true
+        } else {
+            allowTrans = false
+        }
+    }
+    if ([52350, 52359].includes(data?.gameInfo?.division_id)) {
+        iFrameLink = `<iframe class='iframe__content' style='display: block; margin: auto;' src="https://blms1a.coints.ru/iframe.php?fid=9vbjofqrtajc5eu" frameborder="0" width="720" height="400" allowfullscreen scrolling="no"></iframe>`
+        if (data.events.find(event => event.event_id == 23) && !data.events.find(event => event.event_id == 25)) {
+            allowTrans = true
+        } else {
+            allowTrans = false
+        }
+    }
+    
+    if (!isLoaded) {
+        buildTemplate(data, allowTrans)
+        isLoaded = true
+    } else {
+        updateTemplate(data)
+    }
+    if (site !== 'v') {
+        const buttonsContainer = document.querySelector('.buttons')
+        if (data.gameInfo.livematch === null) {
+            if (!buttonsContainer.classList.contains('buttons_hidden')) {
+                buttonsContainer.classList.add('buttons_hidden')
+            }
+        } else {
+            if (buttonsContainer.classList.contains('buttons_hidden')) {
+                buttonsContainer.classList.remove('buttons_hidden')
+            }
+        }
+    }
+
+    if (THEME === 'kz-sport') {
+        setTimeout(() => {
+            fadeOut(loader)
+        }, 200)
+    }
+    if (data.gameInfo.livematch !== translate("Завершён") || (data.gameInfo.livematch === translate("Завершён") && data.events.length && data.events[data.events.length - 1].e_name !== 'Конец матча') ) {
+        setTimeout(await start, 1000 * 60)
+    }
+})()
